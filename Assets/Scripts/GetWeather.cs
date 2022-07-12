@@ -25,14 +25,15 @@ public class GetWeather : MonoBehaviour
     private JsonNode? _areaDict;
     private static readonly string[] _categories = new string[] { "centers","offices","class10s","class15s","class20s"};
     JsonNode currentNode = null;
+    private JsonNode pastNode=null;
     private int currentIndex;
 
     async UniTask Awake()
     {
         //DropDownProcess().Forget();
         _dropDown.onValueChanged.AddListener ( _ => UpdateWeatherText().Forget());
-        _nextButton.onClick.AddListener(()=>currentIndex=Mathf.Clamp(currentIndex+1,0,_categories.Length-1));
-        _backButton.onClick.AddListener(()=>currentIndex=Mathf.Clamp(currentIndex-1,0,_categories.Length-1));
+        _nextButton.onClick.AddListener(() => NextCategory().Forget());
+        
         _url = "https://www.jma.go.jp/bosai/common/const/area.json";
         string text = await GetTextAsync(UnityWebRequest.Get(_url));
         Debug.Log(text);
@@ -45,18 +46,20 @@ public class GetWeather : MonoBehaviour
 
 
         
-        while(true)
-        {
-            
-            await ChangeDropDown(_categories[currentIndex]);
-            Debug.Log(currentIndex);
-            if (currentIndex == 1)
-            {
-                int a = 0;
-            }
-            
-        }
+        // while(true)
+        // {
+        //     
+        //     await ChangeDropDown(_categories[currentIndex]);
+        //     Debug.Log(currentIndex);
+        //     if (currentIndex == 1)
+        //     {
+        //         int a = 0;
+        //     }
+        
+        //}
 
+        await ChangeDropDown(_categories[currentIndex]);
+        
         #region APITest
 
         
@@ -101,6 +104,37 @@ public class GetWeather : MonoBehaviour
     private void Start()
     {
         UpdateWeatherText().Forget();
+    }
+
+    async UniTask NextCategory()
+    {
+        if (currentIndex+1 > _categories.Length)
+        {
+            //TODO:進めない時の処理
+            return;
+        }
+
+        currentIndex++;
+        var currentAreaDic = _areaDict[_categories[currentIndex]].AsDictionary();
+        string linkCate = "children";
+        var names = LinkCateNames(currentAreaDic, linkCate);
+        _dropDown.options = names.Select(node=>node["name"])
+            .Select(officeName => new TMP_Dropdown.OptionData(officeName.ToString())).ToList();
+        var result=await UniTask.WhenAny(_nextButton.onClick.GetAsyncEventHandler(CancellationToken.None).OnInvokeAsync(),_backButton.onClick.GetAsyncEventHandler(CancellationToken.None).OnInvokeAsync());
+        if (result == 0)
+        {
+            pastNode = currentNode;
+            currentNode = names.ToArray()[_dropDown.value];
+        }
+        else
+        {
+            currentNode = LinkCateNames(currentAreaDic, "parent").ToArray().FirstOrDefault();
+            return;
+        }
+        //await UniTask.WaitUntil(()=>Input.GetKeyDown(KeyCode.A));
+        
+        
+        await UpdateWeatherText();
     }
 
     private async UniTask ChangeDropDown(string category)
